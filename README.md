@@ -79,11 +79,12 @@ $p_{N-1}^{0} p_{N-1}^{1} \dots p_{N-1}^{T-1}$
 
 ### ローカルジャッジ
 
-`cargo run --bin local_judge input.txt command`の形式でローカルでプログラム`command`を実行し、出力を得ることができる。
+`cargo run --bin local_judge input command`の形式でローカルで入力`input`に対してプログラム`command`を実行し、出力を得ることができる。
 
 ### ビジュアライズ
 
-TODO
+[ビジュアライザ](https://northward1.github.io/elevator-sim/)に出力を貼り付けると、動作を確認できます。  
+[デモ](https://northward1.github.io/elevator-sim/?autoplay=true)では、実際にビジュアライザが動作しているところを確認できます。
 
 ## ライセンス
 

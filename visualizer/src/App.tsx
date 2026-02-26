@@ -13,8 +13,29 @@ export default function App() {
   const [showConfig, setShowConfig] = useState(true);
   const [copied, setCopied] = useState(false);
 
+  // Initialize Wasm and handle autoplay
   useEffect(() => {
-    init().then(() => setIsWasmLoaded(true));
+    init().then(async () => {
+      setIsWasmLoaded(true);
+      
+      // Check for autoplay parameter
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('autoplay') === 'true') {
+        try {
+          const response = await fetch('/elevator-sim/sample_log.txt');
+          const logText = await response.text();
+          setOutput(logText);
+          // Trigger simulation after state update
+          setTimeout(() => {
+            const btn = document.getElementById('run-sim-btn');
+            if (btn) btn.click();
+            setIsPlaying(true);
+          }, 100);
+        } catch (e) {
+          console.error("Autoplay failed", e);
+        }
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -47,7 +68,6 @@ export default function App() {
     if (!isWasmLoaded) return;
     try {
       const snapshots = run_simulation_wasm(BigInt(seed), output) as any[];
-      
       const snapshotsWithWait = snapshots.map(s => ({
         ...s,
         elevators: s.elevators.map((el: any) => ({
@@ -65,7 +85,6 @@ export default function App() {
           }))
         }))
       }));
-
       setHistory(snapshotsWithWait);
       setTurn(0);
       setShowConfig(false);
@@ -103,7 +122,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30 flex flex-col">
-      
       <header className="h-16 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50 px-6 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
           <div className="bg-blue-600 p-1.5 rounded-lg shadow-lg shadow-blue-900/40">
@@ -111,7 +129,6 @@ export default function App() {
           </div>
           <h1 className="text-xl font-bold tracking-tight text-white">Elevator<span className="text-blue-500">Sim</span></h1>
         </div>
-
         <div className="flex items-center gap-8">
           <div className="hidden md:flex flex-col items-end">
             <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest leading-none mb-1">Global Score</span>
@@ -129,7 +146,6 @@ export default function App() {
       </header>
 
       <main className="p-6 flex-1 overflow-y-auto space-y-6 flex flex-col min-h-0">
-        
         {showConfig && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl shrink-0 animate-in slide-in-from-top duration-300">
             <div className="space-y-4">
@@ -156,13 +172,13 @@ export default function App() {
                 </button>
               </div>
               <button 
+                id="run-sim-btn"
                 onClick={runSimulation}
                 className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold py-2.5 rounded-xl transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]"
               >
                 Load & Visualize
               </button>
             </div>
-
             <div className="space-y-4 flex flex-col">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Agent Output</h3>
               <textarea 
@@ -177,9 +193,8 @@ export default function App() {
 
         <div className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden flex flex-col min-h-0">
           <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(30,41,59,0.3),transparent)] pointer-events-none" />
-
           <div className="relative flex-1 overflow-y-auto custom-scrollbar">
-            <div className="flex justify-center gap-4 min-w-fit pb-4 text-white">
+            <div className="flex justify-center gap-4 min-w-fit pb-4">
               <div className="flex flex-col-reverse gap-0">
                 {[...Array(10)].map((_, floor) => (
                   <div key={floor} className="h-16 flex items-center justify-end pr-4 text-[10px] font-black text-slate-600 border-r border-slate-800 w-10">
@@ -187,7 +202,6 @@ export default function App() {
                   </div>
                 ))}
               </div>
-
               <div className="flex gap-8">
                 <div className="flex gap-3">
                   {[0, 1, 2].map(elIdx => {
@@ -202,11 +216,7 @@ export default function App() {
                           <div className="text-[7px] font-black text-slate-400 uppercase mb-0.5 leading-none">EL-{elIdx}</div>
                           <div className="grid grid-cols-5 gap-0.5 w-full">
                             {el?.passengers.map((p: any, idx: number) => (
-                              <div 
-                                key={idx} 
-                                style={getPassengerStyle(p.waitTime)}
-                                className="w-3 h-4 rounded-[1px] border-[0.5px] flex items-center justify-center transition-colors duration-500"
-                              >
+                              <div key={idx} style={getPassengerStyle(p.waitTime)} className="w-3 h-4 rounded-[1px] border-[0.5px] flex items-center justify-center transition-colors duration-500">
                                 <span className="text-[6px] font-black text-slate-900 leading-none">{p.target_floor}</span>
                               </div>
                             ))}
@@ -219,7 +229,6 @@ export default function App() {
                     );
                   })}
                 </div>
-
                 <div className="flex-1 flex flex-col-reverse gap-0 min-w-[400px]">
                   {[...Array(10)].map((_, floor) => {
                     const floorData = currentState?.floors[floor];
@@ -228,11 +237,7 @@ export default function App() {
                         <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                         <div className="flex items-center gap-1 flex-wrap">
                           {floorData?.waiting.map((p: any, idx: number) => (
-                            <div 
-                              key={idx} 
-                              style={getPassengerStyle(p.waitTime)}
-                              className="w-5 h-8 rounded-sm flex flex-col items-center justify-end pb-1 shadow-sm border transition-all duration-500 relative group/p"
-                            >
+                            <div key={idx} style={getPassengerStyle(p.waitTime)} className="w-5 h-8 rounded-sm flex flex-col items-center justify-end pb-1 shadow-sm border transition-all duration-500 relative group/p">
                               <span className="text-[7px] font-bold text-slate-900/50 absolute top-0.5 leading-none">{p.waitTime}</span>
                               <span className="text-[9px] font-black text-slate-900 leading-none">{p.target_floor}</span>
                             </div>
@@ -250,61 +255,35 @@ export default function App() {
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl shrink-0">
           <div className="flex items-center gap-6">
             <div className="flex gap-2 shrink-0">
-              <button 
-                onClick={() => setTurn(0)} 
-                className="p-2.5 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-white border border-transparent hover:border-slate-700"
-                title="Reset to Turn 0"
-              >
+              <button onClick={() => setTurn(0)} className="p-2.5 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-white border border-transparent hover:border-slate-700" title="Reset to Turn 0">
                 <RotateCcw className="w-5 h-5" />
               </button>
-              <button 
-                onClick={() => setIsPlaying(!isPlaying)} 
-                className="w-10 h-10 bg-blue-600 hover:bg-blue-500 rounded-xl flex items-center justify-center shadow-lg transition-all active:scale-90"
-              >
+              <button onClick={() => setIsPlaying(!isPlaying)} className="w-10 h-10 bg-blue-600 hover:bg-blue-500 rounded-xl flex items-center justify-center shadow-lg transition-all active:scale-90 shrink-0">
                 {isPlaying ? <Pause className="w-5 h-5 fill-white" /> : <Play className="w-5 h-5 fill-white translate-x-0.5" />}
               </button>
             </div>
-
             <div className="flex-1 space-y-1">
               <div className="flex justify-between text-[9px] font-bold text-slate-500 uppercase tracking-wider">
                 <span>Turn 0</span>
                 <span className="text-blue-500 font-black">Turn {turn}</span>
                 <span>Turn 99</span>
               </div>
-              <input 
-                type="range" 
-                min="0" 
-                max={Math.max(0, history.length - 1)} 
-                value={turn} 
-                onChange={e => setTurn(parseInt(e.target.value))}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-              />
+              <input type="range" min="0" max={Math.max(0, history.length - 1)} value={turn} onChange={e => setTurn(parseInt(e.target.value))} className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500" />
             </div>
-
             <div className="flex gap-1 shrink-0">
-              <button 
-                onClick={() => setTurn(Math.max(0, turn - 1))} 
-                className="p-2.5 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-white"
-                title="Previous Turn"
-              >
+              <button onClick={() => setTurn(Math.max(0, turn - 1))} className="p-2.5 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-white" title="Previous Turn">
                 <SkipBack className="w-4 h-4" />
               </button>
-              <button 
-                onClick={() => setTurn(Math.min(history.length - 1, turn + 1))}
-                className="p-2.5 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-white"
-                title="Next Turn"
-              >
+              <button onClick={() => setTurn(Math.min(history.length - 1, turn + 1))} className="p-2.5 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-white" title="Next Turn">
                 <SkipForward className="w-4 h-4" />
               </button>
             </div>
           </div>
         </div>
       </main>
-
       <footer className="py-4 text-center text-slate-600 text-[9px] font-medium uppercase tracking-[0.2em] shrink-0">
         Rust (Wasm) + React + Tailwind
       </footer>
-
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
