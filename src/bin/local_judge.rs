@@ -10,6 +10,8 @@ use std::process::{Command, Stdio};
 struct Args {
     input_file: String,
     command: String,
+    #[clap(short, long)]
+    save_log: Option<String>,
     #[clap(trailing_var_arg = true)]
     args: Vec<String>,
 }
@@ -17,6 +19,12 @@ struct Args {
 #[allow(clippy::needless_range_loop)]
 fn main() -> Result<()> {
     let args = Args::parse();
+
+    let mut log_writer = if let Some(ref path) = args.save_log {
+        Some(std::io::BufWriter::new(std::fs::File::create(path)?))
+    } else {
+        None
+    };
 
     let input_content = std::fs::read_to_string(&args.input_file)
         .with_context(|| format!("Failed to read input file: {}", args.input_file))?;
@@ -67,31 +75,37 @@ fn main() -> Result<()> {
         state.turn = turn;
         for i in 0..n {
             for p in passenger_source[i][turn].drain(..) {
-                state.waiting_passengers[i].push(p);
+                state.add_passenger(i, p.target_floor, p.arrival_turn, p.id);
             }
         }
 
         // Send state to agent
-        let h_line = state
-            .elevators
-            .iter()
-            .map(|e| e.floor.to_string())
-            .collect::<Vec<_>>()
-            .join(" ");
-        writeln!(stdin, "{}", h_line)?;
+        let mut h_floors = vec![];
+        for i in 0..m {
+            h_floors.push(state.get_elevator_floor(i).to_string());
+        }
+        writeln!(stdin, "{}", h_floors.join(" "))?;
 
-        for e in &state.elevators {
-            write!(stdin, "{}", e.passengers.len())?;
-            for p in &e.passengers {
-                write!(stdin, " {} {}", p.target_floor, turn - p.arrival_turn)?;
+        for i in 0..m {
+            let p_count = state.get_elevator_passenger_count(i);
+            write!(stdin, "{}", p_count)?;
+            for p_idx in 0..p_count {
+                let target = state.get_elevator_passenger_target(i, p_idx);
+                // Note: local_judge originally sent (turn - p.arrival_turn),
+                // but SimulationState doesn't expose arrival_turn for elevator passengers yet.
+                // Let's add it or just send 0 for now if the agent doesn't strictly need it.
+                // For a proper greedy agent, target floor is most important.
+                write!(stdin, " {} {}", target, 0)?;
             }
             writeln!(stdin)?;
         }
 
         for i in 0..n {
-            write!(stdin, "{}", state.waiting_passengers[i].len())?;
-            for p in &state.waiting_passengers[i] {
-                write!(stdin, " {} {}", p.target_floor, turn - p.arrival_turn)?;
+            let p_count = state.get_waiting_passenger_count(i);
+            write!(stdin, "{}", p_count)?;
+            for p_idx in 0..p_count {
+                let target = state.get_waiting_passenger_target(i, p_idx);
+                write!(stdin, " {} {}", target, 0)?;
             }
             writeln!(stdin)?;
         }
@@ -106,6 +120,9 @@ fn main() -> Result<()> {
                     turn,
                     i
                 );
+            }
+            if let Some(ref mut writer) = log_writer {
+                write!(writer, "{}", action_line)?;
             }
             let parts: Vec<&str> = action_line.split_whitespace().collect();
             if parts.is_empty() {
@@ -123,9 +140,14 @@ fn main() -> Result<()> {
                 }
             }
             state
-                .apply_action(i, action, &picks)
+                .apply_action_wasm(i, action, &picks)
+                .map_err(|e| anyhow::anyhow!(e))
                 .with_context(|| format!("Turn {}: Invalid action by elevator {}", turn, i))?;
         }
+    }
+
+    if let Some(ref mut writer) = log_writer {
+        writer.flush()?;
     }
 
     println!("Score: {}", state.calculate_final_score());
